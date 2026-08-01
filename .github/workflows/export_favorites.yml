@@ -70,6 +70,9 @@ jobs:
           cd ./usage/
           python workflow_export_favorites.py
 
+          pwd
+          ls ./download
+
       - name: 上传结果
         uses: actions/upload-artifact@v4
         with:
