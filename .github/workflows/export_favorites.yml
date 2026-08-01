@@ -69,7 +69,6 @@ jobs:
         run: |
           cd ./usage/
           python workflow_export_favorites.py
-
           pwd
           ls ./download
 
