@@ -67,10 +67,16 @@ jobs:
 
       - name: 执行代码
         run: |
+          mkdir -p $(dirname $ZIP_FP)
           cd ./usage/
           python workflow_export_favorites.py
-          pwd
-          ls ./download
+          if [ -f "$ZIP_FP" ]; then
+            echo "导出文件已生成: $ZIP_FP"
+            ls -lh "$ZIP_FP"
+          else
+            echo "错误：未找到导出文件 $ZIP_FP"
+            exit 1
+          fi
 
       - name: 上传结果
         uses: actions/upload-artifact@v4
