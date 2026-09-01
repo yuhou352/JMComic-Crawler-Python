@@ -53,16 +53,17 @@ In addition to downloading, other JM interfaces are also implemented on demand. 
 
 - Login
 - Search albums (supports all search parameters)
-- Image downloading and decoding
+- Album comments (including replies and spoiler flags)
 - Categories/Rankings
-- Album/Chapter details
+- Get album/chapter details
+- Image downloading and decoding
 - Personal favorites
 - Interface encryption and decryption (for the APP API)
 
 ## Installation Guide
 
 > ⚠ If you have not installed Python, you must install Python before executing the following steps. [Download from Python Official Site](https://www.python.org/downloads/)
-> **Version 3.12+ is recommended.**
+> **Python 3.14 is recommended.**
 
 * Install via official pip source (recommended, the update command is identical)
 
@@ -219,9 +220,9 @@ Please check the documentation homepage → [jmcomic.readthedocs.io (Chinese lan
 
 ## Key Features
 
-- **Supports both Async and Sync APIs**
 - **Bypass Cloudflare anti-bot mechanisms**
 - **Implement the latest decryption logic for the JM APP API (1.6.3)**
+- Supports **Async** and **Sync** APIs
 - Multiple usages:
 
   - GitHub Actions: Enter the album ID directly on the webpage to download ([Tutorial: Download JM Albums using GitHub Actions](../docs/sources/tutorial/1_github_actions.md))
@@ -229,6 +230,7 @@ Please check the documentation homepage → [jmcomic.readthedocs.io (Chinese lan
   - Python Code: The most powerful usage, requiring basic Python programming knowledge
 - Supports both **Web** and **Mobile** implementations, switchable via configuration (**Mobile is IP restriction-free and very compatible, Web restricts some IP regions but offers higher efficiency**)
 - Built-in **auto-retry and domain switching** mechanisms
+- Supports structured log collection by download task
 - **Multi-threaded downloading** (can be fine-tuned to one-thread-per-image, greatly boosting speed)
 - **Highly configurable**
 
@@ -247,8 +249,9 @@ Please check the documentation homepage → [jmcomic.readthedocs.io (Chinese lan
 
 ## Prerequisites
 
-* Version **3.12+** is recommended, with a minimum compatible version of 3.9.
-  > Note: Python 3.9 and earlier versions reached their End Of Life (EOL) in 2025. You may encounter third-party library incompatibilities at any time if you use version 3.9 or below.
+* **Python 3.14** is recommended. CI currently only covers Python 3.10 and later.
+  > [!NOTE]
+  > Python 3.9 and earlier versions are no longer officially supported (EOL). You may encounter third-party library incompatibilities at any time if you use version 3.9 or below. Python 3.9 remains install-compatible, but is no longer included in CI.
 
 * Since this is a personal project, the documentation/examples may occasionally be out of sync. Please feel free to open an Issue for any clarifications.
 

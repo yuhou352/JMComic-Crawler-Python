@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from copy import deepcopy
 from typing import Sequence
 from urllib.parse import urlencode
 
@@ -18,7 +19,7 @@ from .jm_client_interface import (
 )
 from .jm_entity import (
     JmAlbumDetail, JmPhotoDetail, JmSearchPage, JmCategoryPage,
-    JmFavoritePage, DetailType
+    JmFavoritePage, DetailType, JmAlbumCommentPage
 )
 from .jm_config import JmModuleConfig, JmMagicConstants, time_stamp, jm_log
 from .jm_toolkit import (
@@ -47,6 +48,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
     API_CHAPTER = '/chapter'
     API_SCRAMBLE = '/chapter_view_template'
     API_FAVORITE = '/favorite'
+    API_FORUM = '/forum'
 
     # 缓存未命中标记
     _SENTINEL = object()
@@ -183,7 +185,6 @@ class AsyncJmApiClient(AsyncJmcomicClient):
                 return
 
             # 提取应用配置中预设的网络通信元数据信息（如代理配置与全局 Headers）
-            from copy import deepcopy
             postman_conf = deepcopy(self.option.client.get('postman', {}))
             meta_data = postman_conf.get('meta_data', {})
             if self._meta_kwargs:
@@ -259,6 +260,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
         if not domain_list:
             ExceptionTool.raises("无可用 API 域名列表")
 
+        retry_errors = []
         for domain_index, domain in enumerate(domain_list):
             url = self._build_api_url(url_path, domain)
 
@@ -288,11 +290,21 @@ class AsyncJmApiClient(AsyncJmcomicClient):
                     return resp
                 except Exception as e:
                     self.before_retry(e, url, retry, domain_index)
+                    retry_errors.append({
+                        'domain': domain,
+                        'url': url,
+                        'retry': retry,
+                        'error': e,
+                    })
 
         # 所有域名都失败
         msg = f"请求重试全部失败: [{url_path}], {domain_list}"
         jm_log('req.fallback', msg)
-        ExceptionTool.raises(msg, {}, RequestRetryAllFailException)
+        ExceptionTool.raises(
+            msg,
+            {ExceptionTool.CONTEXT_KEY_RETRY_ERRORS: retry_errors},
+            RequestRetryAllFailException,
+        )
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def before_retry(self, e, url, retry, domain_index):
@@ -392,7 +404,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
         cached = self._cache_get(cache_key)
         if cached is not self._SENTINEL:
             # noinspection PyTypeChecker
-            return cached
+            return deepcopy(cached)
 
         url = self.API_ALBUM if issubclass(clazz, JmAlbumDetail) else self.API_CHAPTER
         resp = await self.req_api(url, params={'id': jmid})
@@ -401,7 +413,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
             ExceptionTool.raise_missing(resp, jmid)
 
         result = JmApiAdaptTool.parse_entity(resp.res_data, clazz)
-        self._cache_set(cache_key, result)
+        self._cache_set(cache_key, deepcopy(result))
         return result
 
     async def get_album_detail(self, album_id) -> JmAlbumDetail:
@@ -558,9 +570,9 @@ class AsyncJmApiClient(AsyncJmcomicClient):
         data = resp.model_data
         if data.get('redirect_aid', None) is not None:
             aid = data.redirect_aid
-            result = JmSearchPage.wrap_single_album(await self.get_album_detail(aid))
+            result = JmSearchPage.wrap_single_album(await self.get_album_detail(aid), page)
         else:
-            result = JmPageTool.parse_api_to_search_page(data)
+            result = JmPageTool.parse_api_to_search_page(data, page)
 
         self._cache_set(cache_key, result)
         return result
@@ -591,7 +603,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
             'o': o,
         }
         resp = await self.req_api(self.API_CATEGORIES_FILTER, params=params)
-        return JmPageTool.parse_api_to_search_page(resp.model_data)
+        return JmPageTool.parse_api_to_search_page(resp.model_data, page)
 
     # month_ranking / week_ranking / day_ranking
     # 继承自 AsyncJmcomicClient 基类
@@ -630,7 +642,39 @@ class AsyncJmApiClient(AsyncJmcomicClient):
                 'o': order_by,
             }
         )
-        return JmPageTool.parse_api_to_favorite_page(resp.model_data)
+        return JmPageTool.parse_api_to_favorite_page(resp.model_data, page)
+
+    async def album_pagination(self,
+                               jm_id: str,
+                               page=1,
+                               series=1,
+                               with_ad_wcm=1,
+                               need_total=True,
+                               ) -> JmAlbumCommentPage:
+        """获取本子评论分页，返回评论分页对象。"""
+        resp = await self.req_api(
+            self.API_FORUM,
+            params={
+                'mode': 'all',
+                'page': page,
+                'aid': JmcomicText.parse_to_jm_id(jm_id),
+            },
+        )
+        return JmPageTool.parse_api_to_album_comment_page(resp.model_data, page)
+
+    async def forum_pagination(self,
+                               page=1,
+                               with_ad_wcm=1,
+                               ) -> JmAlbumCommentPage:
+        """获取全站评论分页。"""
+        resp = await self.req_api(
+            self.API_FORUM,
+            params={
+                'mode': 'all',
+                'page': page,
+            },
+        )
+        return JmPageTool.parse_api_to_album_comment_page(resp.model_data, page)
 
     async def add_favorite_album(self, album_id, folder_id='0'):
         """
@@ -652,7 +696,7 @@ class AsyncJmApiClient(AsyncJmcomicClient):
                             comment_id=None,
                             **kwargs,
                             ) -> JmAlbumCommentResp:
-        """提交图集评论内容"""
+        """提交本子评论内容"""
         # 移动端 API 没有评论接口，此方法仅为接口完整性保留
         raise NotImplementedError('移动端 API 不支持评论功能，请使用网页端 JmHtmlClient')
 
